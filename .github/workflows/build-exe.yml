@@ -1,0 +1,34 @@
+name: Bouw Windows-exe
+
+# Bouwt Ontwerpchecker.exe op een Windows-machine in de cloud, zodat je
+# zelf geen Python hoeft te installeren. Start handmatig via het tabblad
+# "Actions" -> "Bouw Windows-exe" -> "Run workflow", of bij elke push.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Code ophalen
+        uses: actions/checkout@v4
+
+      - name: Python installeren
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Pakketten installeren
+        run: pip install pyinstaller flask PyMuPDF openpyxl
+
+      - name: Executable bouwen
+        run: pyinstaller --noconfirm Ontwerpchecker.spec
+
+      - name: Executable als download aanbieden
+        uses: actions/upload-artifact@v4
+        with:
+          name: Ontwerpchecker-exe
+          path: dist/Ontwerpchecker.exe
