@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ontwerpchecker — bedieningspaneel</title>
+<style>
+  :root{
+    --paper:#E9EDF1; --surface:#FFFFFF; --ink:#16212B; --muted:#5C6B79;
+    --line:#CAD4DD; --rail:#9AA8B4; --accent:#1F6FEB; --accent-d:#1657BE;
+    --ok:#1E8E54; --warn:#B7791F; --block:#C1392B;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --ui:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--ui);
+    font-size:15px;line-height:1.5}
+  .wrap{max-width:980px;margin:0 auto;padding:28px 20px 80px}
+
+  .setup{display:none;border:1px solid var(--warn);background:#FDF6E7;border-radius:10px;
+    padding:16px 18px;margin-bottom:22px;font-size:13.5px;line-height:1.55}
+  .setup.show{display:block}
+  .setup h3{margin:0 0 6px;font-size:14px;color:#8a5d00}
+  .setup code{font-family:var(--mono);background:#fff;border:1px solid var(--line);
+    padding:1px 5px;border-radius:4px;font-size:12px}
+  .setup pre{font-family:var(--mono);background:#0E1822;color:#CBD6E0;padding:10px 12px;
+    border-radius:7px;font-size:12px;overflow:auto;margin:8px 0 0}
+
+  /* ---- kop + enkellijnschema ---- */
+  header{display:flex;flex-direction:column;gap:18px;margin-bottom:26px}
+  .title{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;width:100%}
+  .title h1{font-size:20px;letter-spacing:-.01em;margin:0;font-weight:650}
+  .title .sub{color:var(--muted);font-size:13px;font-family:var(--mono)}
+
+  .bus{display:grid;grid-template-columns:repeat(3,1fr);align-items:center;
+    position:relative;padding:6px 0}
+  .bus::before{content:"";position:absolute;left:8%;right:8%;top:50%;height:2px;
+    background:var(--rail);transform:translateY(-9px)}
+  .bus .fill{position:absolute;left:8%;top:50%;height:2px;background:var(--accent);
+    transform:translateY(-9px);width:0;transition:width .5s ease}
+  .node{display:flex;flex-direction:column;align-items:center;gap:8px;
+    position:relative;z-index:2}
+  .node .mark{width:18px;height:18px;border:2px solid var(--rail);background:var(--surface);
+    transform:rotate(45deg)}
+  .node .lbl{font-size:12px;font-family:var(--mono);color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em}
+  .node.on .mark{border-color:var(--accent);background:var(--accent)}
+  .node.on .lbl{color:var(--ink)}
+  .node.active .mark{box-shadow:0 0 0 4px rgba(31,111,235,.18)}
+
+  /* ---- panelen ---- */
+  .panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;
+    padding:20px;margin-bottom:18px}
+  .panel.locked{opacity:.5;pointer-events:none}
+  .phead{display:flex;align-items:center;gap:10px;margin:0 0 4px}
+  .phead .n{font-family:var(--mono);font-size:12px;color:var(--accent);
+    border:1px solid var(--accent);border-radius:4px;padding:1px 6px}
+  .phead h2{font-size:16px;margin:0;font-weight:620}
+  .pdesc{color:var(--muted);font-size:13px;margin:0 0 16px}
+
+  label{display:block;font-size:13px;font-weight:560;margin:0 0 5px}
+  .hint{color:var(--muted);font-weight:400;font-family:var(--mono);font-size:11px}
+  input[type=text],input[type=password],input[type=number],select{
+    width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:7px;
+    font-family:var(--mono);font-size:13px;background:#FBFCFD;color:var(--ink)}
+  input:focus,select:focus{outline:2px solid rgba(31,111,235,.35);border-color:var(--accent)}
+  .row{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+  .row>div{flex:1;min-width:160px}
+
+  .drop{border:1.5px dashed var(--line);border-radius:8px;padding:14px;text-align:center;
+    color:var(--muted);font-size:13px;cursor:pointer;background:#FBFCFD;margin-bottom:14px}
+  .drop.over{border-color:var(--accent);color:var(--accent);background:#F3F7FF}
+
+  details.adv{margin:4px 0 16px;border-top:1px solid var(--line);padding-top:12px}
+  details.adv summary{cursor:pointer;font-size:13px;color:var(--muted);font-weight:560}
+
+  button.go{appearance:none;border:0;background:var(--accent);color:#fff;font-weight:600;
+    font-size:14px;padding:10px 18px;border-radius:8px;cursor:pointer;font-family:var(--ui)}
+  button.go:hover{background:var(--accent-d)}
+  button.go:disabled{background:var(--rail);cursor:default}
+  button.ghost{appearance:none;background:transparent;border:1px solid var(--line);
+    color:var(--ink);padding:6px 12px;border-radius:7px;cursor:pointer;font-size:12px;
+    font-family:var(--mono)}
+  button.ghost:hover{border-color:var(--accent);color:var(--accent)}
+
+  /* ---- triage-uitvoer ---- */
+  .chips{display:flex;gap:10px;flex-wrap:wrap;margin:16px 0}
+  .chip{background:#F1F5F9;border:1px solid var(--line);border-radius:7px;padding:8px 12px;
+    font-size:13px}
+  .chip b{font-family:var(--mono);font-size:15px}
+  .banner{border-radius:8px;padding:12px 14px;margin:14px 0;font-size:13px;
+    border:1px solid var(--line)}
+  .banner.direct{background:#EBF7F0;border-color:#BFE3CD}
+  .banner.tekstpakket{background:#EEF4FF;border-color:#C9DCFB}
+  .banner.veld_voor_veld{background:#FDF5E6;border-color:#F0DDB0}
+  .banner h4{margin:0 0 4px;font-size:13px}
+
+  table.files{width:100%;border-collapse:collapse;font-size:13px;margin-top:12px}
+  table.files th,table.files td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+  table.files th{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);
+    font-weight:600}
+  table.files td.num{font-family:var(--mono);text-align:right}
+  .lamp{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;
+    vertical-align:middle}
+  .lamp.ok{background:var(--ok)} .lamp.no{background:var(--block)}
+  .reden{color:var(--muted);font-size:12px}
+
+  /* ---- log ---- */
+  .log{font-family:var(--mono);font-size:12px;background:#0E1822;color:#CBD6E0;
+    border-radius:8px;padding:12px 14px;max-height:220px;overflow:auto;white-space:pre-wrap;
+    margin:14px 0;display:none}
+  .log.show{display:block}
+  .log .err{color:#F0938A}
+
+  /* ---- pakket-resultaat ---- */
+  .filelist{font-family:var(--mono);font-size:12px;margin:10px 0}
+  .filelist a{color:var(--accent);text-decoration:none}
+  .filelist a:hover{text-decoration:underline}
+  .filelist .sz{color:var(--muted)}
+  .gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;margin:12px 0}
+  .gallery a{display:block;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+  .gallery img{width:100%;height:90px;object-fit:cover;display:block;background:#fff}
+  .gallery .cap{font-size:10px;font-family:var(--mono);color:var(--muted);padding:3px 5px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+  .md{font-size:13.5px;line-height:1.55;border-top:1px solid var(--line);margin-top:16px;padding-top:14px}
+  .md h1{font-size:16px;margin:14px 0 6px} .md h2{font-size:14px;margin:14px 0 6px}
+  .md h3{font-size:13px;margin:12px 0 4px;color:var(--muted)}
+  .md code{font-family:var(--mono);background:#F1F5F9;padding:1px 4px;border-radius:3px;font-size:12px}
+  .md table{border-collapse:collapse;width:100%;margin:8px 0;font-size:12px}
+  .md th,.md td{border:1px solid var(--line);padding:5px 8px;text-align:left}
+  .md ul{margin:6px 0;padding-left:20px}
+  .md li{margin:2px 0}
+  .err-box{color:var(--block);font-size:13px;margin:10px 0}
+
+  .handoff-actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:4px 0 16px}
+  button.open-ai{appearance:none;border:0;background:var(--accent);color:#fff;font-weight:600;
+    font-size:15px;padding:12px 20px;border-radius:9px;cursor:pointer;font-family:var(--ui)}
+  button.open-ai:hover{background:var(--accent-d)}
+  .steps3{counter-reset:s;margin:6px 0 16px;padding:0;list-style:none;font-size:13.5px}
+  .steps3 li{counter-increment:s;margin:6px 0;padding-left:30px;position:relative}
+  .steps3 li::before{content:counter(s);position:absolute;left:0;top:-1px;width:20px;height:20px;
+    border-radius:50%;background:var(--accent);color:#fff;font-size:12px;font-family:var(--mono);
+    display:flex;align-items:center;justify-content:center}
+  .opdracht{position:relative;margin:8px 0}
+  .opdracht pre{font-family:var(--mono);font-size:12px;background:#0E1822;color:#CBD6E0;
+    border-radius:8px;padding:12px 14px;white-space:pre-wrap;margin:0}
+  .opdracht button{position:absolute;top:8px;right:8px}
+
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+  @media (max-width:560px){.bus .lbl{font-size:10px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="setup" id="setup"></div>
+  <header>
+    <div class="title">
+      <h1>Ontwerpchecker secundair</h1>
+      <span class="sub">lokaal bedieningspaneel</span>
+      <span class="sub" id="versie" style="margin-left:auto"></span>
+    </div>
+    <div class="bus" id="bus">
+      <div class="fill" id="busfill"></div>
+      <div class="node active" data-step="1"><div class="mark"></div><div class="lbl">Triage</div></div>
+      <div class="node" data-step="2"><div class="mark"></div><div class="lbl">Voorbereiden</div></div>
+      <div class="node" data-step="3"><div class="mark"></div><div class="lbl">Naar je AI</div></div>
+    </div>
+  </header>
+
+  <!-- STAP 1 -->
+  <section class="panel" id="p1">
+    <div class="phead"><span class="n">01</span><h2>Triage</h2></div>
+    <p class="pdesc">Kijk eerst hoe de set het best te beoordelen is, gegeven de upload- en contextlimieten.</p>
+
+    <label for="ai">Met welke AI ga je reviewen? <span class="hint">— bepaalt de voorgestelde drempels</span></label>
+    <select id="ai">
+      <option value="claude">Claude</option>
+      <option value="chatgpt">ChatGPT</option>
+      <option value="copilot">Copilot</option>
+    </select>
+    <p class="hint" id="aiNote" style="margin:6px 0 8px"></p>
+    <label style="display:flex;align-items:center;gap:8px;font-weight:400;margin:0 0 14px">
+      <input type="checkbox" id="sendImages" checked style="width:auto;margin:0">
+      Sleutelpagina's als afbeeldingen meesturen
+      <span class="hint">— uit = géén afbeeldingen in het pakket (voorkomt de afbeeldingslimiet)</span>
+    </label>
+
+    <label for="folder">Map met PDF's <span class="hint">— pad op deze machine, of sleep bestanden hieronder</span></label>
+    <input type="text" id="folder" placeholder="/pad/naar/pdfs">
+    <div class="drop" id="drop">Sleep PDF's hierheen om ze te uploaden naar een tijdelijke map</div>
+
+    <details class="adv">
+      <summary>Drempels aanpassen (optioneel)</summary>
+      <div class="row" style="margin-top:12px">
+        <div><label>Max MB/bestand <span class="hint">(±30)</span></label><input type="number" id="maxFileMb" placeholder="28"></div>
+        <div><label>Max pag./PDF <span class="hint">(100)</span></label><input type="number" id="maxPagesPerPdf" placeholder="100"></div>
+        <div><label>Max afbeeldingen <span class="hint">— sleutelpagina's (Claude 20)</span></label><input type="number" id="maxImages" placeholder="20"></div>
+        <div><label>Raster dpi <span class="hint">(100)</span></label><input type="number" id="rasterDpi" placeholder="100"></div>
+        <div><label>Max sleutelpag. <span class="hint">(60)</span></label><input type="number" id="maxRasterPages" placeholder="60"></div>
+      </div>
+    </details>
+
+    <button class="go" id="btnTriage">Triage uitvoeren</button>
+    <div class="err-box" id="err1"></div>
+    <div id="triageOut"></div>
+  </section>
+
+  <!-- STAP 2 -->
+  <section class="panel locked" id="p2">
+    <div class="phead"><span class="n">02</span><h2>Voorbereiden</h2></div>
+    <p class="pdesc">Tekst eruit, outline-register, sleutelpagina's rasteren en — waar nodig — splitsen in upload-bare brokken.</p>
+
+    <label for="out">Uitvoermap <span class="hint">— waar het review_pakket komt</span></label>
+    <input type="text" id="out" placeholder="./review_pakket">
+
+    <div class="row" style="margin-top:14px">
+      <div><label>Max bestanden voor upload <span class="hint">— voorstel op basis van je AI-keuze</span></label>
+        <input type="number" id="maxUploadFiles" value="20"></div>
+    </div>
+
+    <div style="margin-top:6px"><button class="go" id="btnPrepare" disabled>Pakket voorbereiden</button></div>
+    <div class="log" id="log2"></div>
+    <div class="err-box" id="err2"></div>
+    <div id="prepOut"></div>
+  </section>
+
+  <!-- STAP 3 -->
+  <section class="panel locked" id="p3">
+    <div class="phead"><span class="n">03</span><h2>Naar je AI</h2></div>
+    <p class="pdesc">Open je gekozen AI, sleep de bestanden uit het upload-pakket erin en plak de opdracht.</p>
+    <div id="handoff"></div>
+  </section>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const state = { folder:"", out:"", pakket:"", serverOk:false, contextTokens:200000 };
+
+/* ---- voorgestelde drempels per AI (aanpasbaar) ---- */
+const AI_LABEL = {claude:'Claude', chatgpt:'ChatGPT', copilot:'Copilot'};
+const AI_URL = {claude:'https://claude.ai/new', chatgpt:'https://chatgpt.com/', copilot:'https://copilot.microsoft.com/'};
+const AI_PROFILES = {
+  claude:  {maxFileMb:28, maxPagesPerPdf:100, maxUploadFiles:20, maxImages:18, contextTokens:200000,
+            note:"Claude: ~30 MB en 100 pag./PDF, 20 bestanden per gesprek, max ~20 afbeeldingen (marge 18), context ~200k tokens."},
+  chatgpt: {maxFileMb:25, maxPagesPerPdf:300, maxUploadFiles:10, maxImages:10, contextTokens:128000,
+            note:"ChatGPT: 512 MB hard (≤25 MB betrouwbaar), ~10 bestanden/afbeeldingen per bericht, context ~128k tokens."},
+  copilot: {maxFileMb:25, maxPagesPerPdf:50,  maxUploadFiles:5,  maxImages:5,  contextTokens:128000,
+            note:"Copilot: PDF's tot ~50 pag.; weinig bestanden/afbeeldingen per gesprek (verschilt per licentie). Pas zo nodig aan."},
+};
+function applyAI(){
+  const p = AI_PROFILES[$('#ai').value];
+  state.aiLabel = AI_LABEL[$('#ai').value] || 'je AI-chat';
+  state.aiUrl = AI_URL[$('#ai').value] || '';
+  $('#aiNote').textContent = p.note + " — voorstel, je kunt alles hieronder aanpassen.";
+  $('#maxFileMb').value = p.maxFileMb;
+  $('#maxPagesPerPdf').value = p.maxPagesPerPdf;
+  if($('#maxImages')) $('#maxImages').value = p.maxImages;
+  if($('#maxUploadFiles')) $('#maxUploadFiles').value = p.maxUploadFiles;
+  state.contextTokens = p.contextTokens;
+}
+$('#ai').addEventListener('change', applyAI);
+
+/* ---- omgevingscontrole: draait dit via de server? ---- */
+function showSetup(html){ const s=$('#setup'); s.innerHTML=html; s.classList.add('show'); }
+function netError(e){
+  // TypeError "Failed to fetch" = kan de server niet bereiken
+  if(location.protocol === 'file:'){
+    return 'Je hebt index.html als bestand geopend (file://). Zo kan de pagina de '
+      + 'lokale server niet bereiken. Start de server en open de pagina via http://127.0.0.1:8765.';
+  }
+  return 'Kan de lokale server niet bereiken. Draait webapp.py nog? '
+    + 'Open de pagina via http://127.0.0.1:8765 (niet als los bestand).';
+}
+async function checkServer(){
+  if(location.protocol === 'file:'){
+    showSetup(`<h3>Open dit niet als los bestand</h3>
+      Je hebt <code>index.html</code> rechtstreeks geopend (<code>file://</code>). De drie
+      stappen werken dan niet: een browser mag geen mappen op je schijf lezen, geen PDF's
+      splitsen en geen tekeningen rasteren. Start eerst de meegeleverde server en open dan
+      het adres dat hij toont:
+      <pre>pip install flask pypdf
+python3 webapp.py</pre>
+      Daarna opent vanzelf <code>http://127.0.0.1:8765</code> — bedien de tool via dat tabblad.`);
+    return;
+  }
+  try{
+    const r = await fetch('/api/health'); const j = await r.json();
+    state.serverOk = !!(j && j.ok);
+    if(j && j.version) $('#versie').textContent = 'v' + j.version;
+  }catch(e){
+    showSetup(`<h3>Server niet bereikbaar</h3>
+      De pagina is geladen, maar <code>/api/health</code> reageert niet. Waarschijnlijk is
+      <code>webapp.py</code> gestopt of luistert hij op een andere poort. Start opnieuw met
+      <code>python3 webapp.py</code> en ververs deze pagina.`);
+  }
+}
+
+/* ---- enkellijnschema bijwerken ---- */
+function setStep(done, active){
+  document.querySelectorAll('.node').forEach(n=>{
+    const s = +n.dataset.step;
+    n.classList.toggle('on', s<=done);
+    n.classList.toggle('active', s===active);
+  });
+  $('#busfill').style.width = (Math.min(done,2) * 42) + '%';
+}
+function unlock(sel){ $(sel).classList.remove('locked'); }
+
+/* ---- mini-markdownrenderer (kop, lijst, tabel, bold, code) ---- */
+function md(src){
+  if(!src) return "";
+  const esc = t => t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const inline = t => esc(t)
+    .replace(/`([^`]+)`/g,'<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>');
+  const lines = src.split('\n'); let out=[], i=0;
+  while(i<lines.length){
+    let l = lines[i];
+    if(/^#{1,3}\s/.test(l)){ const lv=l.match(/^#+/)[0].length; out.push(`<h${lv}>${inline(l.replace(/^#+\s/,''))}</h${lv}>`); i++; continue; }
+    if(/^\s*\|.*\|\s*$/.test(l)){
+      const tbl=[]; while(i<lines.length && /^\s*\|.*\|\s*$/.test(lines[i])){ tbl.push(lines[i]); i++; }
+      const rows = tbl.filter(r=>!/^\s*\|[\s:|-]+\|\s*$/.test(r))
+        .map(r=>r.trim().replace(/^\||\|$/g,'').split('|').map(c=>c.trim()));
+      if(rows.length){
+        let h='<table><thead><tr>'+rows[0].map(c=>`<th>${inline(c)}</th>`).join('')+'</tr></thead><tbody>';
+        for(let r=1;r<rows.length;r++) h+='<tr>'+rows[r].map(c=>`<td>${inline(c)}</td>`).join('')+'</tr>';
+        out.push(h+'</tbody></table>');
+      }
+      continue;
+    }
+    if(/^\s*[-*]\s/.test(l)){
+      const items=[]; while(i<lines.length && /^\s*[-*]\s/.test(lines[i])){ items.push(lines[i].replace(/^\s*[-*]\s/,'')); i++; }
+      out.push('<ul>'+items.map(t=>`<li>${inline(t)}</li>`).join('')+'</ul>'); continue;
+    }
+    if(l.trim()==='') { i++; continue; }
+    out.push(`<p>${inline(l)}</p>`); i++;
+  }
+  return out.join('');
+}
+
+function fileUrl(root, rel, dl){ return `/api/file?root=${encodeURIComponent(root)}&rel=${encodeURIComponent(rel)}${dl?'&dl=1':''}`; }
+function kb(n){ return n<1024?n+' B':n<1048576?(n/1024).toFixed(0)+' KB':(n/1048576).toFixed(1)+' MB'; }
+
+/* ---- streaming POST (NDJSON) ---- */
+async function streamPost(url, body, onObj){
+  const res = await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(!res.body){ const j=await res.json().catch(()=>({error:'Geen stream'})); onObj(j); return; }
+  const reader = res.body.getReader(); const dec = new TextDecoder(); let buf='';
+  while(true){
+    const {value,done} = await reader.read(); if(done) break;
+    buf += dec.decode(value,{stream:true}); let nl;
+    while((nl=buf.indexOf('\n'))>=0){ const line=buf.slice(0,nl); buf=buf.slice(nl+1);
+      if(line.trim()){ try{ onObj(JSON.parse(line)); }catch(e){} } }
+  }
+}
+
+/* ---- STAP 1: triage ---- */
+$('#btnTriage').onclick = async () => {
+  $('#err1').textContent=''; const b=$('#btnTriage'); b.disabled=true; b.textContent='Bezig…';
+  state.folder = $('#folder').value.trim();
+  const opts = {folder:state.folder, contextTokens:state.contextTokens};
+  ['maxFileMb','maxPagesPerPdf','maxImages','rasterDpi','maxRasterPages'].forEach(k=>{const v=$('#'+k).value; if(v) opts[k]=v;});
+  if(!$('#sendImages').checked) opts.maxImages = 0;
+  try{
+    const r = await fetch('/api/triage',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(opts)});
+    const j = await r.json();
+    if(!j.ok){ $('#err1').textContent = j.error; return; }
+    renderTriage(j); setStep(1,2); unlock('#p2');
+    $('#btnPrepare').disabled=false;
+    if(!$('#out').value) $('#out').value = (state.folder.replace(/\/+$/,'')) + '/../review_pakket';
+  }catch(e){ $('#err1').textContent = (e instanceof TypeError) ? netError(e) : String(e); }
+  finally{ b.disabled=false; b.textContent='Triage uitvoeren'; }
+};
+
+function renderTriage(j){
+  const aTxt = {direct:'Direct uploaden', tekstpakket:'Tekstpakket + steekproef', veld_voor_veld:'Veld-voor-veld of via API'}[j.approach]||j.approach;
+  const aDesc = {
+    direct:'De set is klein genoeg: je kunt de PDF\u2019s rechtstreeks in '+(state.aiLabel||'je AI-chat')+' uploaden. Voorbereiden is optioneel.',
+    tekstpakket:'Te groot als PDF, maar tekst + outline + sleutelpagina\u2019s passen vermoedelijk in \u00e9\u00e9n gesprek. Voorbereiden aanbevolen.',
+    veld_voor_veld:'Het corpus overschrijdt het contextvenster. Werk per veld, of laat de review-stap automatisch chunken (map-reduce).'
+  }[j.approach]||'';
+  let rows = j.pdfs.map(p=>`<tr>
+    <td>${p.name}</td><td class="num">${p.pages}</td><td class="num">${p.mb}</td>
+    <td>${p.has_text?'ja':'<b style="color:var(--block)">NEE</b>'}</td>
+    <td class="num">${p.outline}</td>
+    <td><span class="lamp ${p.direct_upload?'ok':'no'}"></span>${p.direct_upload?'ja':'nee'}</td>
+    <td class="reden">${(p.redenen||[]).join('; ')||'—'}</td></tr>`).join('');
+  $('#triageOut').innerHTML = `
+    <div class="chips">
+      <div class="chip">Pagina's <b>${j.total_pages}</b></div>
+      <div class="chip">Modus <b>${j.mode}</b></div>
+      <div class="chip">Bestanden <b>${j.pdfs.length}</b></div>
+      <div class="chip">Corpus ~<b>${j.est_tokens.toLocaleString('nl-NL')}</b> tok</div>
+      <div class="chip">Context <b>${j.context_tokens.toLocaleString('nl-NL')}</b> tok</div>
+    </div>
+    <div class="banner ${j.approach}"><h4>Aanbevolen: ${aTxt}</h4>${aDesc}</div>
+    <table class="files"><thead><tr>
+      <th>Bestand</th><th>Pag.</th><th>MB</th><th>Tekst</th><th>Outline</th><th>Direct?</th><th>Reden</th>
+    </tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+/* ---- STAP 2: voorbereiden ---- */
+$('#btnPrepare').onclick = async () => {
+  $('#err2').textContent=''; const b=$('#btnPrepare'); b.disabled=true; b.textContent='Bezig…';
+  const log=$('#log2'); log.className='log show'; log.textContent=''; $('#prepOut').innerHTML='';
+  state.out = $('#out').value.trim();
+  const body={folder:state.folder, out:state.out, contextTokens:state.contextTokens, aiLabel:state.aiLabel, ai:$('#ai').value};
+  ['maxFileMb','maxPagesPerPdf','maxImages','rasterDpi','maxRasterPages','maxUploadFiles'].forEach(k=>{const v=$('#'+k).value; if(v) body[k]=v;});
+  if(!$('#sendImages').checked) body.maxImages = 0;
+  try{
+    await streamPost('/api/prepare', body, obj=>{
+      if(obj.log!==undefined){ log.textContent += obj.log+'\n'; log.scrollTop=log.scrollHeight; }
+      if(obj.error){ $('#err2').textContent=obj.error; }
+      if(obj.done){ state.pakket=obj.summary.root; renderPrep(obj.summary); setStep(2,3); unlock('#p3'); renderHandoff(obj.summary); }
+    });
+  }catch(e){ $('#err2').textContent=(e instanceof TypeError) ? netError(e) : String(e); }
+  finally{ b.disabled=false; b.textContent='Pakket voorbereiden'; }
+};
+
+function renderPrep(s){
+  const byKind = k => s.files.filter(f=>f.kind===k);
+  const link = f => `<div><a href="${fileUrl(s.root,f.rel)}" target="_blank">${f.rel}</a> <span class="sz">${kb(f.size)}</span> · <a href="${fileUrl(s.root,f.rel,1)}">download</a></div>`;
+  // --- upload-bundel (max N bestanden voor de gekozen AI) ---
+  const up = byKind('upload');
+  const b = s.bundle || {};
+  const warn = !!b.fits_context_warning;
+  const zipU = `/api/zip?root=${encodeURIComponent(s.root)}&sub=upload`;
+  const upBlock = up.length ? `
+    <div class="banner ${warn?'veld_voor_veld':'direct'}" style="margin-top:18px">
+      <h4>Upload naar ${state.aiLabel||'je AI-chat'} — ${up.length} bestand(en) (limiet ${b.max_files||20})</h4>
+      Upload deze ${up.length} bestanden samen in één ${state.aiLabel||'AI'}-gesprek. De tekst van alle delen
+      is samengevoegd in de <code>tekst_*.md</code>-bestanden; de sleutelpagina's staan in
+      <code>03_sleutelpaginas.pdf</code>; <code>01_LEESMIJ.md</code> bevat de opdracht.
+      ${warn?'<br><b>Let op:</b> de tekst is groot en past mogelijk niet in één gesprek (contextvenster). Overweeg de delen veld-voor-veld in losse gesprekken te uploaden.':''}
+      <div style="margin-top:10px"><a class="ghost" href="${zipU}">⬇ Download upload-pakket (zip)</a></div>
+    </div>
+    <div class="filelist">${up.map(link).join('')}</div>` : '';
+  const docs = ['00_TRIAGE.md','MANIFEST.md','SCANS.md'].map(n=>{const f=s.files.find(x=>x.rel===n); return f?link(f):''}).join('');
+  const corpus = byKind('corpus').map(link).join('');
+  const outline = byKind('outline').map(link).join('');
+  const splits = byKind('split').map(link).join('');
+  const scans = byKind('scan-image');
+  const gallery = scans.length ? `<div class="gallery">${scans.slice(0,40).map(f=>`
+      <a href="${fileUrl(s.root,f.rel)}" target="_blank"><img loading="lazy" src="${fileUrl(s.root,f.rel)}"><div class="cap">${f.rel.split('/').pop()}</div></a>`).join('')}</div>` : '';
+  $('#prepOut').innerHTML = `
+    ${upBlock}
+    <div class="chips" style="margin-top:18px">
+      <div class="chip">Corpus <b>${s.counts.corpus}</b></div>
+      <div class="chip">Sleutelpag. <b>${s.counts.scan_images}</b></div>
+      <div class="chip">Splitsen <b>${s.counts.splits}</b></div>
+    </div>
+    <div class="filelist"><b>Documenten</b>${docs}</div>
+    ${gallery}
+    <details class="adv"><summary>Alle bestanden (${s.files.length})</summary>
+      <div class="filelist"><b>corpus/</b>${corpus}<b>outline/</b>${outline}${splits?'<b>split/</b>'+splits:''}</div>
+    </details>
+    ${s.scans_md ? `<div class="md">${md(s.scans_md)}</div>` : ''}`;
+}
+
+/* ---- STAP 3: overdracht naar de AI ---- */
+const OPDRACHT_FALLBACK = `Voer een onafhankelijke ontwerpverificatie secundair uit over de volledige breedte van het pakket (alle velden/delen, geen steekproef). Gebruik uitsluitend de aangeleverde stukken, geef nooit "Voldoet" zonder herleidbaar bewijs, en lever het resultaat als Excel-bestand volgens het meegeleverde sjabloon Bevindingen_template.xlsx. Zie 01_LEESMIJ.md voor de volledige opdracht.`;
+
+function renderHandoff(s){
+  const ai = state.aiLabel || 'je AI-chat';
+  const n = s.files.filter(f=>f.kind==='upload').length;
+  const zip = `/api/zip?root=${encodeURIComponent(s.root)}&sub=upload`;
+  const opdracht = (s.bundle && s.bundle.opdracht) ? s.bundle.opdracht : OPDRACHT_FALLBACK;
+  const copilotTip = $('#ai').value==='copilot'
+    ? '<p class="hint" style="margin-top:4px">Tip: het gratis Copilot-web staat soms maar enkele bestanden per dag toe; met een M365-licentie meer. Laat Copilot de bevindingen dan cumulatief in hetzelfde Excel-werkboek bijhouden.</p>' : '';
+  $('#handoff').innerHTML = `
+    <ol class="steps3">
+      <li>Download het upload-pakket (${n} bestanden, incl. Excel-sjabloon) en pak de zip uit.</li>
+      <li>Open ${ai} en start een nieuw gesprek.</li>
+      <li>Sleep alle ${n} bestanden erin en plak de opdracht hieronder.${(s.bundle&&s.bundle.n_images!=null)?(s.bundle.n_images===0?` <span class="hint">(géén afbeeldingen — alleen tekst, dus geen afbeeldingslimiet)</span>`:` <span class="hint">(de sleutelpagina's = ${s.bundle.n_images} afbeeldingen, limiet ${s.bundle.max_images})</span>`):''}</li>
+      <li>${ai} levert de review terug als ingevuld <b>Excel-bestand</b> (Bevindingen_template.xlsx).</li>
+    </ol>
+    <div class="handoff-actions">
+      <button class="open-ai" id="btnOpenAI">Open ${ai} ↗</button>
+      <a class="ghost" href="${zip}">⬇ Download upload-pakket (zip)</a>
+    </div>
+    ${copilotTip}
+    <label style="margin-top:10px">Opdracht om te plakken <span class="hint">— identiek aan 01_LEESMIJ.md in het pakket</span></label>
+    <div class="opdracht"><button class="ghost" id="btnCopy">Kopieer</button><pre id="opd"></pre></div>`;
+  $('#opd').textContent = opdracht;
+  $('#btnOpenAI').onclick = () => { if(state.aiUrl){ window.open(state.aiUrl,'_blank','noopener'); setStep(3,0); } };
+  $('#btnCopy').onclick = async () => {
+    try{ await navigator.clipboard.writeText(opdracht); $('#btnCopy').textContent='Gekopieerd ✓';
+      setTimeout(()=>{$('#btnCopy').textContent='Kopieer';},1500); }
+    catch(e){ const r=document.createRange(); r.selectNode($('#opd')); getSelection().removeAllRanges(); getSelection().addRange(r); }
+  };
+}
+
+/* ---- drag & drop upload ---- */
+const drop=$('#drop');
+['dragover','dragenter'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add('over');}));
+['dragleave','drop'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove('over');}));
+drop.addEventListener('drop', async ev=>{
+  const files=[...ev.dataTransfer.files].filter(f=>f.name.toLowerCase().endsWith('.pdf'));
+  if(!files.length){ drop.textContent='Geen PDF\u2019s gevonden in de sleep.'; return; }
+  drop.textContent=`${files.length} PDF\u2019s uploaden…`;
+  const fd=new FormData(); files.forEach(f=>fd.append('files',f));
+  try{
+    const r=await fetch('/api/upload',{method:'POST',body:fd}); const j=await r.json();
+    if(j.ok){ $('#folder').value=j.folder; drop.textContent=`${j.count} PDF\u2019s klaar in tijdelijke map.`; }
+    else drop.textContent=j.error;
+  }catch(e){ drop.textContent=String(e); }
+});
+
+setStep(0,1);
+checkServer();
+applyAI();
+</script>
+</body>
+</html>
